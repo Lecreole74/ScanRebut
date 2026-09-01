@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+</head>
+
+<body>
+
+<button id="cameraButton">
+  📷 TESTER LA CAMÉRA
+</button>
+
+<div id="status"></div>
+
+<video
+  id="video"
+  autoplay
+  playsinline
+  style="width:100%">
+</video>
+
+<script>
+
+document
+  .getElementById("cameraButton")
+  .addEventListener("click", async function() {
+
+    const status =
+      document.getElementById("status");
+
+    try {
+
+      status.innerText =
+        "Demande d'autorisation...";
+
+      const stream =
+        await navigator.mediaDevices.getUserMedia({
+
+          video: {
+            facingMode: {
+              ideal: "environment"
+            }
+          },
+
+          audio: false
+
+        });
+
+      document
+        .getElementById("video")
+        .srcObject = stream;
+
+      status.innerText =
+        "🟢 CAMÉRA OK";
+
+    }
+    catch(error) {
+
+      console.error(error);
+
+      status.innerText =
+        "🔴 " +
+        error.name +
+        " : " +
+        error.message;
+
+      alert(
+        "Erreur : " +
+        error.name +
+        "\n" +
+        error.message +
+        "\n\nURL:\n" +
+        window.location.href
+      );
+
+    }
+
+  });
+
+</script>
+
+</body>
+</html>
