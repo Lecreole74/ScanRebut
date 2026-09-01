@@ -41,6 +41,25 @@
       text-transform: uppercase;
     }
     #refInput:focus { outline: none; border-color: var(--accent); }
+    #refRow { display: flex; gap: 8px; }
+    #refRow #refInput { flex: 1; }
+    #scanRefBtn {
+      flex: 0 0 auto; width: 56px; padding: 0; font-size: 22px;
+      background: var(--panel); border: 2px solid var(--panel2);
+    }
+    #refScanOverlay {
+      display: none; position: fixed; inset: 0; z-index: 50;
+      background: #000; flex-direction: column;
+    }
+    #refVideo { flex: 1; width: 100%; object-fit: cover; }
+    #refScanHint {
+      position: absolute; top: 16px; left: 16px; right: 16px; text-align: center;
+      color: #fff; font-size: 14px; text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+    }
+    #closeRefScan {
+      background: var(--nok); border-radius: 0;
+      padding: 16px; padding-bottom: calc(16px + env(safe-area-inset-bottom));
+    }
     button {
       border: none; border-radius: 12px; padding: 16px; font-size: 18px;
       font-weight: 600; cursor: pointer; color: #fff;
@@ -125,9 +144,19 @@
     <h1>📦 ScanRebut</h1>
     <p class="sub">Saisissez la référence en cours puis démarrez le scan.</p>
     <label for="refInput">Référence en cours</label>
-    <input id="refInput" type="text" placeholder="EX: EF4052C" autocomplete="off" autocorrect="off" spellcheck="false">
+    <div id="refRow">
+      <input id="refInput" type="text" placeholder="EX: EF4052C" autocomplete="off" autocorrect="off" spellcheck="false">
+      <button id="scanRefBtn" type="button" title="Scanner la référence">📷</button>
+    </div>
     <div id="setupError"></div>
     <button id="startBtn">▶️ Démarrer le scan</button>
+  </div>
+
+  <!-- ===================== Overlay : scan de la référence ===================== -->
+  <div id="refScanOverlay">
+    <video id="refVideo" autoplay playsinline muted></video>
+    <div id="refScanHint">Visez le code-barres, la référence sera extraite automatiquement.</div>
+    <button id="closeRefScan">✖️ Annuler</button>
   </div>
 
   <!-- ===================== ÉCRAN 2 : scan caméra (vidéo continue) ===================== -->
@@ -208,6 +237,11 @@
   var resultScreen = document.getElementById('resultScreen');
 
   var refInput = document.getElementById('refInput');
+  var scanRefBtn = document.getElementById('scanRefBtn');
+  var refScanOverlay = document.getElementById('refScanOverlay');
+  var refVideo = document.getElementById('refVideo');
+  var closeRefScan = document.getElementById('closeRefScan');
+  var refCodeReader = null;
   var setupError = document.getElementById('setupError');
   var startBtn = document.getElementById('startBtn');
 
@@ -234,23 +268,40 @@
   // Retour sonore / vibration
   // ------------------------------------------------------------------
   var audioCtx = null;
-  function beep(freq, durationMs) {
+  function ensureAudioCtx() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    // Les navigateurs mobiles démarrent le contexte audio "suspendu" tant
+    // qu'aucun geste utilisateur ne l'a débloqué : on le relance ici,
+    // appelé depuis le clic sur "Démarrer le scan" (donc un vrai geste).
+    if (audioCtx.state === 'suspended') { audioCtx.resume().catch(function () {}); }
+    return audioCtx;
+  }
+  function beep(freq, durationMs, delayMs, type, gainValue) {
     try {
-      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      var osc = audioCtx.createOscillator();
-      var gain = audioCtx.createGain();
-      osc.type = 'sine';
+      var ctx = ensureAudioCtx();
+      var start = ctx.currentTime + (delayMs || 0) / 1000;
+      var osc = ctx.createOscillator();
+      var gain = ctx.createGain();
+      osc.type = type || 'sine';
       osc.frequency.value = freq;
-      gain.gain.value = 0.15;
+      gain.gain.value = gainValue || 0.25;
       osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      osc.start();
-      osc.stop(audioCtx.currentTime + durationMs / 1000);
+      gain.connect(ctx.destination);
+      osc.start(start);
+      osc.stop(start + durationMs / 1000);
     } catch (e) { /* audio indisponible : on ignore */ }
   }
   function feedback(ok) {
-    if (ok) { beep(1200, 120); if (navigator.vibrate) navigator.vibrate(60); }
-    else { beep(300, 220); if (navigator.vibrate) navigator.vibrate([80, 60, 80]); }
+    if (ok) {
+      beep(1200, 120, 0, 'sine', 0.25);
+      if (navigator.vibrate) navigator.vibrate(60);
+    } else {
+      // double bip grave et plus fort (timbre carré, plus perçant) pour
+      // bien se distinguer du bip OK et rester audible sur haut-parleur mobile.
+      beep(480, 150, 0, 'square', 0.35);
+      beep(480, 150, 200, 'square', 0.35);
+      if (navigator.vibrate) navigator.vibrate([80, 60, 80]);
+    }
   }
 
   // ------------------------------------------------------------------
@@ -262,6 +313,7 @@
       setupError.textContent = 'Merci de saisir une référence.';
       return;
     }
+    ensureAudioCtx(); // débloque le son ici, pendant un vrai geste utilisateur
     setupError.textContent = '';
     currentReference = ref;
     readNumeros = new Set();
@@ -276,6 +328,48 @@
     scanScreen.style.display = 'flex';
     startCamera();
   });
+
+  // ------------------------------------------------------------------
+  // Scan de la référence (écran de configuration) : alternative à la
+  // saisie manuelle, on scanne n'importe quel code de la référence
+  // (même format que les pièces) et on en extrait la référence.
+  // ------------------------------------------------------------------
+  scanRefBtn.addEventListener('click', function () {
+    setupError.textContent = '';
+    refScanOverlay.style.display = 'flex';
+    ensureAudioCtx();
+
+    var hints = new Map();
+    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.DATA_MATRIX]);
+    hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+    refCodeReader = new ZXing.BrowserMultiFormatReader(hints);
+
+    var constraints = { video: { facingMode: { ideal: 'environment' } }, audio: false };
+    var done = false;
+    refCodeReader.decodeFromConstraints(constraints, 'refVideo', function (result) {
+      if (done || !result) return; // ignore les NotFoundException et tout résultat après le 1er
+      done = true;
+      var raw = result.getText().trim();
+      var m = BARCODE_RE.exec(raw);
+      var ref = m ? m[1] : raw; // si le code suit le format complet, on ne garde que la référence
+      refInput.value = ref.toUpperCase();
+      feedback(true);
+      closeRefScanOverlay();
+    }).catch(function (err) {
+      closeRefScanOverlay();
+      setupError.textContent = 'Scan référence : ' + (err && err.message ? err.message : err);
+    });
+  });
+
+  closeRefScan.addEventListener('click', closeRefScanOverlay);
+
+  function closeRefScanOverlay() {
+    if (refCodeReader) {
+      try { refCodeReader.reset(); } catch (e) {}
+      refCodeReader = null;
+    }
+    refScanOverlay.style.display = 'none';
+  }
 
   // ------------------------------------------------------------------
   // Caméra + scan continu DataMatrix
