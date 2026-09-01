@@ -242,7 +242,6 @@
   var okScans = [];                // scans validés OK, envoyés au backend
   var lastRawCode = null;
   var lastRawTime = 0;
-  var codeReader = null;
   var torchOn = false;
 
   var REPEAT_COOLDOWN_MS = 1500;   // ignore la relecture immédiate du même code
@@ -396,26 +395,98 @@
   }
 
   // ------------------------------------------------------------------
-  // Caméra + scan continu DataMatrix
+  // Caméra + scan continu DataMatrix, restreint à la zone du cadre
   // ------------------------------------------------------------------
+  // Le cadre affiché (#guide) n'était qu'un habillage visuel : le
+  // décodage portait sur l'image entière, donc un autre code visible
+  // ailleurs dans le champ de la caméra pouvait être lu à la place de
+  // celui visé dans le cadre. On recadre maintenant chaque image sur la
+  // zone du cadre avant de la donner au décodeur.
+  var multiFormatReader = null;
+  var mediaStream = null;
+  var scanLoopActive = false;
+  var scanCanvas = document.createElement('canvas');
+  var scanCtx = scanCanvas.getContext('2d', { willReadFrequently: true });
+
+  // Doit correspondre à la position CSS de #guide (top/left/right/bottom en %).
+  var GUIDE_BOX = { top: 0.37, left: 0.31, right: 0.31, bottom: 0.49 };
+  var GUIDE_MARGIN = 1.25; // marge de tolérance autour du cadre visuel
+
   function startCamera() {
     var hints = new Map();
     hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.DATA_MATRIX]);
     hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
-    codeReader = new ZXing.BrowserMultiFormatReader(hints);
+    multiFormatReader = new ZXing.MultiFormatReader();
+    multiFormatReader.setHints(hints);
 
     var constraints = { video: { facingMode: { ideal: 'environment' } }, audio: false };
 
-    codeReader.decodeFromConstraints(constraints, 'video', function (result, err) {
-      if (result) {
+    navigator.mediaDevices.getUserMedia(constraints)
+      .then(function (stream) {
+        mediaStream = stream;
+        video.srcObject = stream;
+        return video.play();
+      })
+      .then(function () {
+        setupTorch();
+        scanLoopActive = true;
+        requestAnimationFrame(scanTick);
+      })
+      .catch(function (err) {
+        showSetupCameraError(err);
+      });
+  }
+
+  function scanTick() {
+    if (!scanLoopActive) return;
+    if (video.readyState >= video.HAVE_CURRENT_DATA && video.videoWidth) {
+      try {
+        var crop = computeGuideCropRect();
+        scanCanvas.width = crop.w;
+        scanCanvas.height = crop.h;
+        scanCtx.drawImage(video, crop.x, crop.y, crop.w, crop.h, 0, 0, crop.w, crop.h);
+
+        var luminanceSource = new ZXing.HTMLCanvasElementLuminanceSource(scanCanvas);
+        var binaryBitmap = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(luminanceSource));
+        var result = multiFormatReader.decode(binaryBitmap);
         handleDecoded(result.getText());
+      } catch (e) {
+        // NotFoundException à chaque image sans code détecté dans le cadre : normal, on ignore.
       }
-      // err = NotFoundException à chaque frame sans code détecté : normal, on ignore.
-    }).then(function () {
-      setupTorch();
-    }).catch(function (err) {
-      showSetupCameraError(err);
-    });
+    }
+    if (scanLoopActive) requestAnimationFrame(scanTick);
+  }
+
+  // Convertit la zone du cadre (en % de l'image affichée, cf. GUIDE_BOX)
+  // en rectangle de pixels dans la résolution native de la vidéo, en
+  // tenant compte du recadrage introduit par object-fit: cover.
+  function computeGuideCropRect() {
+    var vw = video.videoWidth, vh = video.videoHeight;
+    var dw = video.clientWidth || window.innerWidth;
+    var dh = video.clientHeight || window.innerHeight;
+    var scale = Math.max(dw / vw, dh / vh);
+    var offsetX = (vw * scale - dw) / 2;
+    var offsetY = (vh * scale - dh) / 2;
+
+    var gW = (1 - GUIDE_BOX.left - GUIDE_BOX.right) * dw;
+    var gH = (1 - GUIDE_BOX.top - GUIDE_BOX.bottom) * dh;
+    var gCenterX = GUIDE_BOX.left * dw + gW / 2;
+    var gCenterY = GUIDE_BOX.top * dh + gH / 2;
+
+    var boxW = Math.min(dw, gW * GUIDE_MARGIN);
+    var boxH = Math.min(dh, gH * GUIDE_MARGIN);
+
+    var nx = (gCenterX - boxW / 2 + offsetX) / scale;
+    var ny = (gCenterY - boxH / 2 + offsetY) / scale;
+    var nw = boxW / scale;
+    var nh = boxH / scale;
+
+    nx = Math.max(0, Math.min(nx, vw - 1));
+    ny = Math.max(0, Math.min(ny, vh - 1));
+    nw = Math.max(1, Math.min(nw, vw - nx));
+    nh = Math.max(1, Math.min(nh, vh - ny));
+
+    return { x: nx, y: ny, w: nw, h: nh };
   }
 
   function showSetupCameraError(err) {
@@ -426,7 +497,7 @@
 
   function setupTorch() {
     try {
-      var stream = video.srcObject;
+      var stream = mediaStream;
       if (!stream) return;
       var track = stream.getVideoTracks()[0];
       var caps = track.getCapabilities ? track.getCapabilities() : {};
@@ -441,10 +512,13 @@
   }
 
   function stopCamera() {
-    if (codeReader) {
-      try { codeReader.reset(); } catch (e) {}
-      codeReader = null;
+    scanLoopActive = false;
+    multiFormatReader = null;
+    if (mediaStream) {
+      mediaStream.getTracks().forEach(function (t) { t.stop(); });
+      mediaStream = null;
     }
+    video.srcObject = null;
     torchBtn.style.display = 'none';
     torchOn = false;
   }
