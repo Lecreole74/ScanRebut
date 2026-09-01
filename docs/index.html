@@ -40,8 +40,11 @@
 
     /* ---------- Écran de configuration ---------- */
     #setupScreen {
-      flex: 1; display: flex; flex-direction: column; justify-content: center;
-      padding: 24px; gap: 16px;
+      flex: 1; display: flex; flex-direction: column;
+      padding: 24px;
+    }
+    #setupContent {
+      flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 16px;
     }
     #setupScreen h1 { font-size: 22px; margin: 0 0 4px; text-align: center; }
     #setupScreen p.sub { color: var(--muted); text-align: center; margin: 0 0 16px; font-size: 14px; }
@@ -155,7 +158,7 @@
     #savingMsg { text-align: center; color: var(--muted); }
 
     /* ---------- Pied de page (numéro de version) ---------- */
-    #appFooter { margin-top: auto; padding-top: 20px; text-align: center; font-size: 12px; color: var(--muted); }
+    #appFooter { padding-top: 20px; text-align: center; font-size: 12px; color: var(--muted); }
   </style>
 </head>
 <body>
@@ -163,15 +166,17 @@
 
   <!-- ===================== ÉCRAN 1 : configuration ===================== -->
   <div id="setupScreen">
-    <h1>📦 ScanRebut</h1>
-    <p class="sub">Saisissez la référence en cours puis démarrez le scan.</p>
-    <label for="refInput">Référence en cours</label>
-    <div id="refRow">
-      <input id="refInput" type="text" placeholder="EX: EAC9117F" autocomplete="off" autocorrect="off" spellcheck="false">
-      <button id="scanRefBtn" type="button" title="Scanner la référence">📷</button>
+    <div id="setupContent">
+      <h1>📦 ScanRebut</h1>
+      <p class="sub">Saisissez la référence en cours puis démarrez le scan.</p>
+      <label for="refInput">Référence en cours</label>
+      <div id="refRow">
+        <input id="refInput" type="text" placeholder="EX: EAC9117F" autocomplete="off" autocorrect="off" spellcheck="false">
+        <button id="scanRefBtn" type="button" title="Scanner la référence">📷</button>
+      </div>
+      <div id="setupError"></div>
+      <button id="startBtn">▶️ Démarrer le scan</button>
     </div>
-    <div id="setupError"></div>
-    <button id="startBtn">▶️ Démarrer le scan</button>
     <footer id="appFooter">version <span id="appVersionText"></span></footer>
   </div>
 
@@ -233,7 +238,7 @@
 
   // Numéro de version affiché en pied de page — à incrémenter à chaque
   // modification de l'appli (ex: 1.0 -> 1.1).
-  var APP_VERSION = '1.0';
+  var APP_VERSION = '1.1';
   document.getElementById('appVersionText').textContent = APP_VERSION;
 
   // ------------------------------------------------------------------
