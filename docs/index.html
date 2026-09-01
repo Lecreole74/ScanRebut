@@ -43,10 +43,11 @@
       flex: 1; display: flex; flex-direction: column;
       padding: 24px;
     }
+    #appHeader { padding-top: env(safe-area-inset-top); }
+    #appHeader h1 { font-size: 22px; margin: 0; text-align: center; }
     #setupContent {
       flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 16px;
     }
-    #setupScreen h1 { font-size: 22px; margin: 0 0 4px; text-align: center; }
     #setupScreen p.sub { color: var(--muted); text-align: center; margin: 0 0 16px; font-size: 14px; }
     label { font-size: 14px; color: var(--muted); }
     #refInput {
@@ -166,8 +167,8 @@
 
   <!-- ===================== ÉCRAN 1 : configuration ===================== -->
   <div id="setupScreen">
+    <header id="appHeader"><h1>📦 ScanRebut</h1></header>
     <div id="setupContent">
-      <h1>📦 ScanRebut</h1>
       <p class="sub">Saisissez la référence en cours puis démarrez le scan.</p>
       <label for="refInput">Référence en cours</label>
       <div id="refRow">
@@ -238,7 +239,7 @@
 
   // Numéro de version affiché en pied de page — à incrémenter à chaque
   // modification de l'appli (ex: 1.0 -> 1.1).
-  var APP_VERSION = '1.1';
+  var APP_VERSION = '1.2';
   document.getElementById('appVersionText').textContent = APP_VERSION;
 
   // ------------------------------------------------------------------
