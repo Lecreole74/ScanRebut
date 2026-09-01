@@ -51,10 +51,18 @@
       display: none; position: fixed; inset: 0; z-index: 50;
       background: #000; flex-direction: column;
     }
-    #refVideo { flex: 1; width: 100%; object-fit: cover; }
+    #refVideoWrap { position: relative; flex: 1; overflow: hidden; }
+    #refVideo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    #refGuide {
+      position: absolute; top: 30%; left: 12%; right: 12%; bottom: 42%;
+      border: 3px solid rgba(255,255,255,0.75); border-radius: 16px;
+      box-shadow: 0 0 0 999px rgba(0,0,0,0.35);
+      pointer-events: none;
+    }
     #refScanHint {
       position: absolute; top: 16px; left: 16px; right: 16px; text-align: center;
       color: #fff; font-size: 14px; text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+      z-index: 1;
     }
     #closeRefScan {
       background: var(--nok); border-radius: 0;
@@ -73,7 +81,7 @@
     #video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; background: #000; }
 
     #guide {
-      position: absolute; top: 30%; left: 12%; right: 12%; bottom: 42%;
+      position: absolute; top: 37%; left: 31%; right: 31%; bottom: 49%;
       border: 3px solid rgba(255,255,255,0.75); border-radius: 16px;
       box-shadow: 0 0 0 999px rgba(0,0,0,0.35);
       pointer-events: none; transition: border-color 0.15s, box-shadow 0.15s;
@@ -154,8 +162,11 @@
 
   <!-- ===================== Overlay : scan de la référence ===================== -->
   <div id="refScanOverlay">
-    <video id="refVideo" autoplay playsinline muted></video>
-    <div id="refScanHint">Visez le code-barres, la référence sera extraite automatiquement.</div>
+    <div id="refVideoWrap">
+      <video id="refVideo" autoplay playsinline muted></video>
+      <div id="refGuide"></div>
+      <div id="refScanHint">Visez le code-barres, la référence sera extraite automatiquement.</div>
+    </div>
     <button id="closeRefScan">✖️ Annuler</button>
   </div>
 
