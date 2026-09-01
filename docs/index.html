@@ -153,7 +153,7 @@
     <p class="sub">Saisissez la référence en cours puis démarrez le scan.</p>
     <label for="refInput">Référence en cours</label>
     <div id="refRow">
-      <input id="refInput" type="text" placeholder="EX: EF4052C" autocomplete="off" autocorrect="off" spellcheck="false">
+      <input id="refInput" type="text" placeholder="EX: EAC9117F" autocomplete="off" autocorrect="off" spellcheck="false">
       <button id="scanRefBtn" type="button" title="Scanner la référence">📷</button>
     </div>
     <div id="setupError"></div>
@@ -236,9 +236,11 @@
 
   var REPEAT_COOLDOWN_MS = 1500;   // ignore la relecture immédiate du même code
 
-  // Format attendu : reference-date-code_defaut-numero_unique
-  // Ex: EF4052C-20260903-280012-192327098
-  var BARCODE_RE = /^([A-Za-z0-9]+)-(\d{8})-(\d+)-(\d+)$/;
+  // Format attendu : reference + date(jj.mm.aaaa)_code_defaut_numero_serie
+  // (référence et date collées sans séparateur, la date est repérée par
+  // son motif jj.mm.aaaa)
+  // Ex: EAC9117F31.08.2026_280022_3108202603076
+  var BARCODE_RE = /^(.+?)(\d{2}\.\d{2}\.\d{4})_(\d+)_(\d+)$/;
 
   // ------------------------------------------------------------------
   // Références DOM
