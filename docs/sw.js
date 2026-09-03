@@ -4,16 +4,26 @@
 //
 // IMPORTANT : incrémenter CACHE (v2, v3, ...) à chaque déploiement qui
 // change docs/. Le nom de cache est ce qui force les appareils ayant déjà
-// installé la PWA à récupérer la nouvelle version au prochain lancement
-// (voir activate ci-dessous, qui supprime les anciens caches).
-var CACHE = 'scanrebut-v6';
+// installé la PWA à récupérer la nouvelle version (voir activate
+// ci-dessous, qui supprime les anciens caches).
+//
+// Le nouveau service worker n'active PAS tout seul (pas de skipWaiting
+// automatique) : il reste "en attente" jusqu'à ce que l'utilisateur
+// clique sur "Mettre à jour" dans le popup affiché par index.html, qui
+// envoie alors le message SKIP_WAITING ci-dessous.
+var CACHE = 'scanrebut-v7';
 var ASSETS = ['./', './index.html', './manifest.json', './icon.svg'];
 
 self.addEventListener('install', function (event) {
   event.waitUntil(
     caches.open(CACHE).then(function (cache) { return cache.addAll(ASSETS); })
   );
-  self.skipWaiting();
+});
+
+self.addEventListener('message', function (event) {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener('activate', function (event) {

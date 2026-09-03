@@ -167,6 +167,18 @@
 
     /* ---------- Pied de page (numéro de version) ---------- */
     #appFooter { padding-top: 20px; text-align: center; font-size: 12px; color: var(--muted); }
+
+    /* ---------- Popup de mise à jour ---------- */
+    #updateToast {
+      position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom));
+      z-index: 100; background: var(--panel); border: 1px solid var(--panel2); border-radius: 12px;
+      padding: 14px 16px; display: flex; align-items: center; gap: 12px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+      transform: translateY(140%); transition: transform 0.25s ease-out;
+    }
+    #updateToast.show { transform: translateY(0); }
+    #updateToast span { flex: 1; font-size: 14px; }
+    #updateToast button { flex: 0 0 auto; padding: 10px 16px; font-size: 14px; background: var(--accent); }
   </style>
 </head>
 <body>
@@ -244,13 +256,19 @@
 
 </div>
 
+<!-- ===================== Popup : mise à jour disponible ===================== -->
+<div id="updateToast">
+  <span>Une nouvelle version est disponible.</span>
+  <button id="updateBtn">Mettre à jour</button>
+</div>
+
 <script>
 (function () {
   'use strict';
 
   // Numéro de version affiché en pied de page — à incrémenter à chaque
   // modification de l'appli (ex: 1.0 -> 1.1).
-  var APP_VERSION = '1.3';
+  var APP_VERSION = '1.4';
   document.getElementById('appVersionText').textContent = APP_VERSION;
 
   // ------------------------------------------------------------------
@@ -718,7 +736,54 @@
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () {
-    navigator.serviceWorker.register('sw.js').catch(function () { /* PWA non supportée : tant pis, l'appli marche quand même */ });
+    navigator.serviceWorker.register('sw.js').then(function (registration) {
+      var updateToast = document.getElementById('updateToast');
+      var updateBtn = document.getElementById('updateBtn');
+      var waitingWorker = null;
+
+      function showUpdateToast(worker) {
+        waitingWorker = worker;
+        updateToast.classList.add('show');
+      }
+
+      // Un service worker déjà en attente (ex: onglet resté ouvert
+      // pendant qu'une mise à jour s'est installée en arrière-plan).
+      if (registration.waiting) {
+        showUpdateToast(registration.waiting);
+      }
+
+      // Nouvelle mise à jour détectée pendant que la page est ouverte.
+      registration.addEventListener('updatefound', function () {
+        var newWorker = registration.installing;
+        if (!newWorker) return;
+        newWorker.addEventListener('statechange', function () {
+          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+            showUpdateToast(newWorker);
+          }
+        });
+      });
+
+      updateBtn.addEventListener('click', function () {
+        updateBtn.disabled = true;
+        if (waitingWorker) {
+          waitingWorker.postMessage({ type: 'SKIP_WAITING' });
+        }
+      });
+
+      // Une fois le nouveau service worker actif, on recharge pour
+      // afficher la version à jour.
+      navigator.serviceWorker.addEventListener('controllerchange', function () {
+        window.location.reload();
+      });
+
+      // Revérifie une mise à jour dès que l'appli revient au premier
+      // plan (utile en PWA installée, ouverte longtemps sans rechargement).
+      document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'visible') {
+          registration.update().catch(function () {});
+        }
+      });
+    }).catch(function () { /* PWA non supportée : tant pis, l'appli marche quand même */ });
   });
 }
 </script>
