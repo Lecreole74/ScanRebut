@@ -6,7 +6,7 @@
 // change docs/. Le nom de cache est ce qui force les appareils ayant déjà
 // installé la PWA à récupérer la nouvelle version au prochain lancement
 // (voir activate ci-dessous, qui supprime les anciens caches).
-var CACHE = 'scanrebut-v5';
+var CACHE = 'scanrebut-v6';
 var ASSETS = ['./', './index.html', './manifest.json', './icon.svg'];
 
 self.addEventListener('install', function (event) {
